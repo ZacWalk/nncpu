@@ -1,0 +1,18 @@
+[package]
+name = "nncpu"
+description = "Run Gemma, Llama and Qwen GGUF language models on the CPU, with AVX2/FMA kernels and no GPU"
+readme = "README.md"
+keywords = ["llm", "gguf", "inference", "gemma", "qwen"]
+categories = ["science", "text-processing"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/nncpu"
+
+[dependencies]
+log.workspace = true
+memmap2.workspace = true

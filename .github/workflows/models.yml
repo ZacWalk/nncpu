@@ -1,0 +1,93 @@
+name: Model check
+
+# Runs a real model on ARM and x64 runners. Start it from the Actions tab, or
+# with `gh workflow run models.yml`. Each runner checks the model's answer to a
+# question and times a longer reply; the last job compares the platforms.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Catalogue name of a chat model (nncpu --download lists them); the macOS runner has 7 GB of memory"
+        type: string
+        default: gemma-3-270m-q8
+
+env:
+  CARGO_TERM_COLOR: always
+  MODEL: ${{ inputs.model }}
+
+jobs:
+  run:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS on Apple silicon, then Linux and Windows on ARM: all three run
+        # the portable kernels. The x64 runners use AVX2, for comparison.
+        os: [macos-latest, ubuntu-24.04-arm, windows-11-arm, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release -p nncpu-cli
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: model-${{ inputs.model }}
+      - name: Download the model
+        run: |
+          mkdir -p models
+          target/release/nncpu --download "$MODEL" --yes
+      - name: Ask a question
+        run: |
+          target/release/nncpu -m "$MODEL" -p "What is the capital of France? Answer in one word." --temp 0 -n 16 \
+            2> question.err | tee answer.txt
+          cat question.err
+          grep -qi paris answer.txt || { echo "::error::the model did not answer Paris"; exit 1; }
+      - name: Time a reply
+        run: |
+          target/release/nncpu -m "$MODEL" -p "Write a short story about a lighthouse keeper." --temp 0 -n 128 -v \
+            > story.txt 2> story.err
+          cat story.txt
+          stats=$(grep 'tok/s' story.err | tail -n 1 | tr -d '\r' | sed -e 's/^\[//' -e 's/\]$//')
+          kernels=AVX2
+          if grep -q 'portable kernels' story.err; then kernels=portable; fi
+          echo "${{ matrix.os }}|${{ runner.arch }}|$kernels|$stats" > result.txt
+          echo "${{ matrix.os }} (${{ runner.arch }}, $kernels kernels): $stats" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ matrix.os }}
+          path: |
+            result.txt
+            story.txt
+
+  compare:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: results
+      - name: Summarise
+        run: |
+          ref=results/result-ubuntu-latest/story.txt
+          {
+            echo "### $MODEL"
+            echo
+            echo "| Runner | CPU | Kernels | Reply | Same reply as ubuntu-latest |"
+            echo "| --- | --- | --- | --- | --- |"
+            for d in results/result-*; do
+              [ -f "$d/result.txt" ] || continue
+              IFS='|' read -r os arch kernels stats < "$d/result.txt"
+              same=-
+              if [ -f "$ref" ]; then
+                if cmp -s "$d/story.txt" "$ref"; then same=yes; else same=no; fi
+              fi
+              echo "| $os | $arch | $kernels | $stats | $same |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"

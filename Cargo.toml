@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["crates/nncpu", "crates/nncpu-cli"]
+
+[workspace.package]
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+authors = ["Zac Walker"]
+repository = "https://github.com/ZacWalk/nncpu"
+homepage = "https://github.com/ZacWalk/nncpu"
+
+[workspace.dependencies]
+nncpu = { path = "crates/nncpu", version = "0.1.0" }
+log = "0.4"
+memmap2 = "0.9"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+debug = "line-tables-only"
+
+# Tests exercise the kernels and a synthetic model; unoptimised they are slow.
+[profile.test]
+opt-level = 2

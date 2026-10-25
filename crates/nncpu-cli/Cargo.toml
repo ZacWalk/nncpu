@@ -1,0 +1,22 @@
+[package]
+name = "nncpu-cli"
+description = "Chat with Gemma, Llama and Qwen GGUF models on the CPU: the nncpu command-line app"
+keywords = ["llm", "gguf", "chat", "cli", "gemma"]
+categories = ["command-line-utilities", "science"]
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "nncpu"
+path = "src/main.rs"
+
+[dependencies]
+nncpu.workspace = true
+log.workspace = true
+ctrlc = "3.5"
